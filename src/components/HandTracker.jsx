@@ -4,6 +4,20 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+
+// Dynamically load MediaPipe libraries
+let Hands;
+let Camera;
+
+const loadMediaPipe = async () => {
+  if (!Hands || !Camera) {
+    const handsModule = await import('@mediapipe/hands');
+    const cameraModule = await import('@mediapipe/camera_utils');
+    Hands = handsModule.Hands;
+    Camera = cameraModule.Camera;
+  }
+  return { Hands, Camera };
+};
 import { Hands } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 
@@ -161,8 +175,11 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
         setIsLoading(true);
         setError(null);
 
+        // Load MediaPipe modules dynamically
+        const { Hands: HandsClass, Camera: CameraClass } = await loadMediaPipe();
+
         // Create Hands instance
-        const hands = new Hands({
+        const hands = new HandsClass({
           locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           },
@@ -180,7 +197,7 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
         hands.onResults(onResults);
 
         if (videoRef.current && canvasRef.current) {
-          const camera = new Camera(videoRef.current, {
+          const camera = new CameraClass(videoRef.current, {
             onFrame: async () => {
               if (handsRef.current) {
                 await handsRef.current.send({ image: videoRef.current });
