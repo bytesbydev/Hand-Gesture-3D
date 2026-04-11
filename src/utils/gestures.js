@@ -240,3 +240,35 @@ export function getHandVelocity(currentPos, previousPos) {
     z: (currentPos.z || 0) - (previousPos.z || 0),
   };
 }
+
+/**
+ * Calculate finger spread percentage
+ * Measures how much fingers are extended from palm
+ */
+export function calculateFingerSpread(hand) {
+  if (!hand || hand.length < 21) return 0;
+
+  const palmCenter = getHandCenter(hand);
+  if (!palmCenter) return 0;
+
+  const fingerTips = [
+    hand[LANDMARKS.THUMB_TIP],
+    hand[LANDMARKS.INDEX_TIP],
+    hand[LANDMARKS.MIDDLE_TIP],
+    hand[LANDMARKS.RING_TIP],
+    hand[LANDMARKS.PINKY_TIP],
+  ];
+
+  let totalDistance = 0;
+  let count = 0;
+
+  for (let tip of fingerTips) {
+    if (tip) {
+      totalDistance += distance3D(palmCenter, tip);
+      count++;
+    }
+  }
+
+  const avgDistance = totalDistance / count;
+  return Math.min(100, Math.round(avgDistance * 300)); // Scale to 0-100 percentage
+}
