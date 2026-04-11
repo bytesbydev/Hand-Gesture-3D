@@ -22,11 +22,13 @@ import {
 } from '../utils/smoothing.js';
 
 /**
- * Interactive Cube Component
+ * Interactive Cube Component with Enhanced Visuals
  */
 const InteractiveCube = ({ handsData }) => {
   const meshRef = useRef(null);
   const materialRef = useRef(null);
+  const glowMaterialRef = useRef(null);
+  const glowMeshRef = useRef(null);
 
   // State for gesture tracking
   const stateRef = useRef({
@@ -39,6 +41,7 @@ const InteractiveCube = ({ handsData }) => {
     targetRotation: { x: 0, y: 0, z: 0 },
     currentRotation: { x: 0, y: 0, z: 0 },
     velocity: { x: 0, y: 0, z: 0 },
+    rotationSpeed: 0,
   });
 
   // Smoothing filters
@@ -122,7 +125,7 @@ const InteractiveCube = ({ handsData }) => {
   }, [handsData]);
 
   /**
-   * Animation loop
+   * Animation loop with enhanced visuals
    */
   useFrame(() => {
     if (!meshRef.current) return;
@@ -161,18 +164,27 @@ const InteractiveCube = ({ handsData }) => {
     );
     meshRef.current.scale.set(state.currentScale, state.currentScale, state.currentScale);
 
-    // Smooth rotation
+    // Smooth rotation with auto-spin
     state.currentRotation.z = smoothAngle(
       state.targetRotation.z,
       state.currentRotation.z,
       ROTATION_SMOOTH
     );
 
+    // Auto-rotate when not grabbed
+    if (!state.isGrabbed) {
+      state.rotationSpeed += 0.001;
+      meshRef.current.rotation.x += 0.005;
+      meshRef.current.rotation.y += 0.008;
+    } else {
+      state.rotationSpeed *= 0.95;
+    }
+
     meshRef.current.rotation.z = state.currentRotation.z;
 
     // Update material color based on grab state
     if (materialRef.current) {
-      const targetColor = state.isGrabbed ? 0xff6600 : 0x0099ff;
+      const targetColor = state.isGrabbed ? 0xff3366 : 0x00ffff;
       const currentColor = new THREE.Color(materialRef.current.color);
       const targetColorObj = new THREE.Color(targetColor);
 
@@ -180,40 +192,74 @@ const InteractiveCube = ({ handsData }) => {
       materialRef.current.color.set(currentColor);
 
       // Increase emissive when grabbed
-      const emissiveIntensity = state.isGrabbed ? 0.5 : 0.1;
-      materialRef.current.emissive.setScalar(emissiveIntensity * 0.2);
+      const emissiveIntensity = state.isGrabbed ? 0.8 : 0.2;
+      materialRef.current.emissive.setScalar(emissiveIntensity);
+    }
+
+    // Update glow mesh
+    if (glowMeshRef.current && glowMaterialRef.current) {
+      glowMeshRef.current.position.copy(meshRef.current.position);
+      glowMeshRef.current.rotation.copy(meshRef.current.rotation);
+      glowMeshRef.current.scale.copy(meshRef.current.scale);
+
+      const targetGlowIntensity = state.isGrabbed ? 2 : 0.8;
+      glowMaterialRef.current.emissiveIntensity = THREE.MathUtils.lerp(
+        glowMaterialRef.current.emissiveIntensity || 0.8,
+        targetGlowIntensity,
+        0.1
+      );
     }
   });
 
   return (
-    <mesh ref={meshRef} position={[0, 0, 0]} castShadow receiveShadow>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshPhongMaterial
-        ref={materialRef}
-        color={0x0099ff}
-        emissive={0x0099ff}
-        emissiveIntensity={0.2}
-        shininess={100}
-        wireframe={false}
-      />
-    </mesh>
+    <>
+      {/* Main cube with neon material */}
+      <mesh ref={meshRef} position={[0, 0, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial
+          ref={materialRef}
+          color={0x00ffff}
+          emissive={0x00ffff}
+          emissiveIntensity={0.2}
+          metalness={0.8}
+          roughness={0.2}
+          wireframe={false}
+        />
+      </mesh>
+
+      {/* Glow effect mesh */}
+      <mesh ref={glowMeshRef} position={[0, 0, 0]}>
+        <boxGeometry args={[1.1, 1.1, 1.1]} />
+        <meshBasicMaterial
+          ref={glowMaterialRef}
+          color={0x00ffff}
+          emissive={0x00ffff}
+          emissiveIntensity={0.8}
+          transparent
+          opacity={0.3}
+          wireframe={false}
+        />
+      </mesh>
+    </>
   );
 };
 
 /**
- * Lighting and Scene Setup
+ * Lighting and Scene Setup with Enhanced Effects
  */
 const SceneContent = ({ handsData }) => {
   return (
     <>
       {/* Cameras and Controls */}
-      <PerspectiveCamera makeDefault position={[0, 0, 5]} />
+      <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={60} />
       
-      {/* Lighting */}
-      <ambientLight intensity={0.6} color={0xffffff} />
+      {/* Enhanced Lighting Setup */}
+      <ambientLight intensity={0.7} color={0xffffff} />
+      
+      {/* Key light */}
       <directionalLight
         position={[5, 10, 7]}
-        intensity={1.2}
+        intensity={1.5}
         color={0xffffff}
         castShadow
         shadow-mapSize-width={2048}
@@ -225,17 +271,18 @@ const SceneContent = ({ handsData }) => {
         shadow-camera-bottom={-10}
       />
       
-      {/* Colored accent lights */}
-      <pointLight position={[-5, 3, 5]} intensity={0.6} color={0x00ffff} />
-      <pointLight position={[5, 3, -5]} intensity={0.6} color={0xff0099} />
+      {/* Neon accent lights for depth */}
+      <pointLight position={[-5, 3, 5]} intensity={1.2} color={0x00ffff} distance={20} decay={1.5} />
+      <pointLight position={[5, 3, -5]} intensity={1.2} color={0xff00ff} distance={20} decay={1.5} />
+      <pointLight position={[0, -3, 3]} intensity={0.8} color={0x00ff88} distance={15} decay={1.5} />
 
       {/* Interactive Cube */}
       <InteractiveCube handsData={handsData} />
 
-      {/* Ground plane (optional) */}
+      {/* Reflective ground plane */}
       <mesh position={[0, -3, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color={0x111111} metalness={0.3} roughness={0.8} />
+        <meshStandardMaterial color={0x0a1a3a} metalness={0.4} roughness={0.6} />
       </mesh>
     </>
   );

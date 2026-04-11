@@ -12,7 +12,14 @@ import './App.css';
 function App() {
   const [handsData, setHandsData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    likes: 2500,
+    comments: 1200,
+    shares: 450,
+    sessionTime: 0
+  });
   const handsDataRef = useRef([]);
+  const sessionStartRef = useRef(Date.now());
 
   /**
    * Callback from HandTracker when hands are detected
@@ -22,6 +29,23 @@ function App() {
     setHandsData(hands);
     setIsLoading(false);
   }, []);
+
+  // Update session time
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setStats(prev => ({
+        ...prev,
+        sessionTime: Math.floor((Date.now() - sessionStartRef.current) / 1000)
+      }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="app">
@@ -36,26 +60,43 @@ function App() {
           />
         </div>
 
-        {/* Right side: 3D scene */}
-        <div className="scene-section">
-          <Scene3D handsData={handsData} />
+        {/* Right side: Scene and Stats */}
+        <div className="right-section">
+          <div className="scene-section">
+            <Scene3D handsData={handsData} />
+          </div>
+
+          {/* Engagement Stats Sidebar */}
+          <div className="stats-sidebar">
+            <div className="stat-item">
+              <div className="stat-icon">❤️</div>
+              <div className="stat-label">Likes</div>
+              <div className="stat-value">{stats.likes.toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-item">
+              <div className="stat-icon">💬</div>
+              <div className="stat-label">Comments</div>
+              <div className="stat-value">{stats.comments.toLocaleString()}</div>
+            </div>
+            
+            <div className="stat-item">
+              <div className="stat-icon">📤</div>
+              <div className="stat-label">Shares</div>
+              <div className="stat-value">{stats.shares.toLocaleString()}</div>
+            </div>
+
+            <div className="stat-item">
+              <div className="stat-icon">⏱️</div>
+              <div className="stat-label">Session</div>
+              <div className="stat-value">{formatTime(stats.sessionTime)}</div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Overlay HUD */}
       <HUD handsData={handsData} isLoading={isLoading} />
-
-      {/* Info panel */}
-      <div className="info-panel">
-        <div className="info-header">💡 Tips</div>
-        <ul className="info-list">
-          <li>Move your hand to move the cube</li>
-          <li>Use both hands to scale the cube</li>
-          <li>Pinch thumb and index to grab</li>
-          <li>Open hand to release</li>
-          <li>Rotate hand to rotate cube</li>
-        </ul>
-      </div>
     </div>
   );
 }
