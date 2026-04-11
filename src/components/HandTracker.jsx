@@ -1,8 +1,11 @@
 /**
- * HandTracker Component (FINAL SAFE LOCAL VERSION)
+ * HandTracker Component - Air Drawing System
+ * Uses MediaPipe Hands for real-time hand detection
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Hands } from '@mediapipe/hands';
+import { Camera } from '@mediapipe/camera_utils';
 
 const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) => {
   const videoRef = useRef(null);
@@ -13,29 +16,6 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
-
-  /**
-   * 🔥 LOAD LOCAL MEDIAPIPE SCRIPTS
-   */
-  const loadScripts = () => {
-    return new Promise((resolve, reject) => {
-      const handScript = document.createElement('script');
-      handScript.src = '/hands/hands.js';
-
-      handScript.onload = () => {
-        const cameraScript = document.createElement('script');
-        cameraScript.src = '/camera_utils/camera_utils.js';
-
-        cameraScript.onload = () => resolve();
-        cameraScript.onerror = () => reject('Camera utils failed');
-
-        document.body.appendChild(cameraScript);
-      };
-
-      handScript.onerror = () => reject('Hands failed');
-      document.body.appendChild(handScript);
-    });
-  };
 
   /**
    * Process landmarks
@@ -173,7 +153,7 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
   }, [onHandsDetected, processLandmarks]);
 
   /**
-   * Initialize
+   * Initialize hand detection with MediaPipe
    */
   useEffect(() => {
     const init = async () => {
@@ -181,12 +161,11 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
         setIsLoading(true);
         setError(null);
 
-        // ✅ Load scripts locally
-        await loadScripts();
-
-        // ✅ Use window object (NO imports)
-        const hands = new window.Hands({
-          locateFile: (file) => `/hands/${file}`,
+        // Create Hands instance
+        const hands = new Hands({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+          },
         });
 
         handsRef.current = hands;
@@ -200,8 +179,8 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
 
         hands.onResults(onResults);
 
-        if (videoRef.current) {
-          const camera = new window.Camera(videoRef.current, {
+        if (videoRef.current && canvasRef.current) {
+          const camera = new Camera(videoRef.current, {
             onFrame: async () => {
               if (handsRef.current) {
                 await handsRef.current.send({ image: videoRef.current });
@@ -212,13 +191,13 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
           });
 
           cameraRef.current = camera;
-          camera.start();
+          await camera.start();
         }
 
         setIsInitialized(true);
         setIsLoading(false);
       } catch (err) {
-        console.error('Error initializing:', err);
+        console.error('[v0] HandTracker initialization error:', err);
         setError(err.toString());
         setIsLoading(false);
       }
@@ -227,7 +206,12 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
     init();
 
     return () => {
-      cameraRef.current?.stop();
+      if (cameraRef.current) {
+        cameraRef.current.stop?.();
+      }
+      if (handsRef.current) {
+        handsRef.current.close?.();
+      }
     };
   }, [videoWidth, videoHeight, onResults]);
 
