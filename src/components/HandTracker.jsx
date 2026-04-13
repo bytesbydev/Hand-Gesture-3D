@@ -1,23 +1,9 @@
 /**
  * HandTracker Component - Air Drawing System
- * Uses MediaPipe Hands for real-time hand detection
+ * Uses MediaPipe Hands for real-time hand detection via CDN
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-
-// Dynamically load MediaPipe libraries
-let Hands;
-let Camera;
-
-const loadMediaPipe = async () => {
-  if (!Hands || !Camera) {
-    const handsModule = await import('@mediapipe/hands');
-    const cameraModule = await import('@mediapipe/camera_utils');
-    Hands = handsModule.Hands;
-    Camera = cameraModule.Camera;
-  }
-  return { Hands, Camera };
-};
 
 const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) => {
   const videoRef = useRef(null);
@@ -28,6 +14,48 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  /**
+   * Load MediaPipe Hands from CDN
+   */
+  const loadHandsFromCDN = () => {
+    return new Promise((resolve, reject) => {
+      // Check if window.Hands already exists
+      if (window.Hands && window.Camera) {
+        resolve();
+        return;
+      }
+
+      // Load hands solution
+      const handsScript = document.createElement('script');
+      handsScript.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js';
+      handsScript.crossOrigin = 'anonymous';
+
+      handsScript.onload = () => {
+        // Load camera utils
+        const cameraScript = document.createElement('script');
+        cameraScript.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1646424915/camera_utils.js';
+        cameraScript.crossOrigin = 'anonymous';
+
+        cameraScript.onload = () => {
+          console.log('[v0] MediaPipe libraries loaded successfully');
+          resolve();
+        };
+
+        cameraScript.onerror = () => {
+          reject(new Error('Failed to load camera utils from CDN'));
+        };
+
+        document.body.appendChild(cameraScript);
+      };
+
+      handsScript.onerror = () => {
+        reject(new Error('Failed to load hands solution from CDN'));
+      };
+
+      document.body.appendChild(handsScript);
+    });
+  };
 
   /**
    * Process landmarks
@@ -162,7 +190,7 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
     }
 
     onHandsDetected?.(handsData);
-  }, [onHandsDetected, processLandmarks]);
+  }, [onHandsDetected, processLandmarks, drawNeonHand]);
 
   /**
    * Initialize hand detection with MediaPipe
@@ -173,13 +201,13 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
         setIsLoading(true);
         setError(null);
 
-        // Load MediaPipe modules dynamically
-        const { Hands: HandsClass, Camera: CameraClass } = await loadMediaPipe();
+        // Load MediaPipe from CDN
+        await loadHandsFromCDN();
 
-        // Create Hands instance
-        const hands = new HandsClass({
+        // Create Hands instance using window object
+        const hands = new window.Hands({
           locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           },
         });
 
@@ -195,7 +223,7 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
         hands.onResults(onResults);
 
         if (videoRef.current && canvasRef.current) {
-          const camera = new CameraClass(videoRef.current, {
+          const camera = new window.Camera(videoRef.current, {
             onFrame: async () => {
               if (handsRef.current) {
                 await handsRef.current.send({ image: videoRef.current });
@@ -232,35 +260,19 @@ const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) =
 
   return (
     <div style={styles.container}>
-      <video ref={videoRef} style={{ display: 'none' }} />
-
-      <canvas
-        ref={canvasRef}
+      <video
+        ref={videoRef}
+        style={styles.video}
         width={videoWidth}
         height={videoHeight}
-        style={styles.canvas}
       />
-
-      {isLoading && (
-        <div style={styles.overlay}>
-          <div style={styles.loadingText}>
-            Initializing Hand Tracking...
-            <div style={styles.spinner} />
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div style={styles.errorOverlay}>
-          <div style={styles.errorText}>⚠️ {error}</div>
-        </div>
-      )}
-
-      {isInitialized && !isLoading && (
-        <div style={styles.statusIndicator}>
-          <span style={styles.statusDot} /> Active
-        </div>
-      )}
+      <canvas
+        ref={canvasRef}
+        style={styles.canvas}
+        width={videoWidth}
+        height={videoHeight}
+      />
+      {error && <div style={styles.error}>{error}</div>}
     </div>
   );
 };
@@ -269,57 +281,33 @@ const styles = {
   container: {
     position: 'relative',
     width: '100%',
-    aspectRatio: '4 / 3',
-    backgroundColor: '#0a0e27',
-    borderRadius: '12px',
+    height: '100%',
     overflow: 'hidden',
   },
+  video: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
   canvas: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     width: '100%',
     height: '100%',
   },
-  overlay: {
+  error: {
     position: 'absolute',
-    inset: 0,
-    background: 'rgba(0,0,0,0.8)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#00d4ff',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    background: 'rgba(255, 0, 0, 0.9)',
+    color: '#fff',
+    padding: '20px',
+    borderRadius: '8px',
     textAlign: 'center',
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid rgba(0,212,255,0.3)',
-    borderTop: '3px solid #00d4ff',
-    borderRadius: '50%',
-    marginTop: '10px',
-  },
-  errorOverlay: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
-  },
-  statusIndicator: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    color: '#00d4ff',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    background: '#00d4ff',
-    borderRadius: '50%',
-    display: 'inline-block',
+    zIndex: 100,
   },
 };
 
