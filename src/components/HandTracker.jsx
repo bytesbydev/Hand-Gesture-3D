@@ -18,8 +18,6 @@ const loadMediaPipe = async () => {
   }
   return { Hands, Camera };
 };
-import { Hands } from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
 
 const HandTracker = ({ onHandsDetected, videoWidth = 640, videoHeight = 480 }) => {
   const videoRef = useRef(null);
